@@ -2,6 +2,15 @@ libseccomp: Releases
 ===============================================================================
 https://github.com/seccomp/libseccomp
 
+* Unreleased
+- Add architecture-scoped rule APIs: seccomp_rule_add_arch(),
+  seccomp_rule_add_arch_array(), seccomp_rule_add_exact_arch(), and
+  seccomp_rule_add_exact_arch_array()
+- Add seccomp_export_bpf_arch(), seccomp_export_pfc_arch(), and
+  seccomp_export_bpf_mem_arch() to generate a filter for a single architecture
+- Preserve the existing all-architecture rule and export behavior for API
+  compatibility
+
 * Version 2.6.2 - November 20, 2026
 - Fix issue where incorrect accumulator reloads can lead to erroneous actions.
   See GitHub Advisory GHSA-35x7-vh54-jvqf

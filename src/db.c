@@ -2388,6 +2388,7 @@ static int _db_col_rule_add(struct db_filter *filter,
 /**
  * Add a new rule to the current filter
  * @param col the filter collection
+ * @param arch_token the architecture token, zero for all architectures
  * @param strict the strict flag
  * @param action the filter action
  * @param syscall the syscall number
@@ -2400,16 +2401,19 @@ static int _db_col_rule_add(struct db_filter *filter,
  * is true the function will fail if the exact rule can not be added to the
  * filter, if the strict flag is false the function will not fail if the
  * function needs to adjust the rule due to architecture specifics.  Returns
- * zero on success, negative values on failure.
+ * zero on success, negative values on failure.  If @arch_token is non-zero,
+ * the rule is only added to the matching architecture filter.
  *
  */
-int db_col_rule_add(struct db_filter_col *col,
-		    bool strict, uint32_t action, int syscall,
-		    unsigned int arg_cnt, const struct scmp_arg_cmp *arg_array)
+int db_col_rule_add_arch(struct db_filter_col *col, uint32_t arch_token,
+			 bool strict, uint32_t action, int syscall,
+			 unsigned int arg_cnt,
+			 const struct scmp_arg_cmp *arg_array)
 {
 	int rc = 0, rc_tmp;
 	unsigned int iter;
 	unsigned int arg_num;
+	bool arch_found = false;
 	size_t chain_size;
 	struct db_api_arg *chain = NULL;
 	struct scmp_arg_cmp arg_data;
@@ -2462,6 +2466,9 @@ int db_col_rule_add(struct db_filter_col *col,
 	/* add the rule to the different filters in the collection */
 	for (iter = 0; iter < col->filter_cnt; iter++) {
 		db = col->filters[iter];
+		if (arch_token != 0 && db->arch->token != arch_token)
+			continue;
+		arch_found = true;
 
 		/* create the rule */
 		rule = _db_rule_new(strict, action, syscall, chain);
@@ -2479,6 +2486,8 @@ add_arch_fail:
 		if (rc_tmp != 0 && rc == 0)
 			rc = rc_tmp;
 	}
+	if (!arch_found)
+		rc = -EEXIST;
 
 	/* commit the transaction or abort */
 	if (rc == 0)
@@ -2496,6 +2505,27 @@ add_return:
 	if (chain != NULL)
 		free(chain);
 	return rc;
+}
+
+/**
+ * Add a new rule to the current filter
+ * @param col the filter collection
+ * @param strict the strict flag
+ * @param action the filter action
+ * @param syscall the syscall number
+ * @param arg_cnt the number of argument filters in the argument filter chain
+ * @param arg_array the argument filter chain, (uint, enum scmp_compare, ulong)
+ *
+ * This is the compatibility wrapper which adds a rule to every architecture
+ * filter in the collection.
+ *
+ */
+int db_col_rule_add(struct db_filter_col *col,
+		    bool strict, uint32_t action, int syscall,
+		    unsigned int arg_cnt, const struct scmp_arg_cmp *arg_array)
+{
+	return db_col_rule_add_arch(col, 0, strict, action, syscall,
+				    arg_cnt, arg_array);
 }
 
 /**

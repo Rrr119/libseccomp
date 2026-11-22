@@ -1,0 +1,21 @@
+test type: bpf-sim
+
+# 1: a scoped rule is active on its architecture
+# Testname			Arch	Syscall		Arg0	Arg1	Arg2	Arg3	Arg4	Arg5	Result
+68-sim-arch_filter		+x86	read		N	N	N	N	N	N	ALLOW
+# 2: the same syscall is still denied on a different architecture
+68-sim-arch_filter		+x86_64	read		N	N	N	N	N	N	KILL
+# 3: legacy rules keep their all-architecture behavior
+68-sim-arch_filter		+x86_64	write		N	N	N	N	N	N	ALLOW
+# 4: architecture-scoped exact rules and scoped syscalls
+68-sim-arch_filter		+x86	getpid		N	N	N	N	N	N	ALLOW
+68-sim-arch_filter		+x86_64	getpid		N	N	N	N	N	N	KILL
+68-sim-arch_filter		+x86_64	close		N	N	N	N	N	N	ALLOW
+# 5: the later broad rule optimizes away the argument-specific rule
+68-sim-arch_filter		+x86_64	openat		42	N	N	N	N	N	ERRNO(77)
+68-sim-arch_filter		+x86_64	openat		123	N	N	N	N	N	ERRNO(77)
+
+test type: bpf-valgrind
+
+# Testname
+68-sim-arch_filter

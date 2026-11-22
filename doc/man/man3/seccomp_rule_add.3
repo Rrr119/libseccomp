@@ -2,7 +2,8 @@
 .\" //////////////////////////////////////////////////////////////////////////
 .SH NAME
 .\" //////////////////////////////////////////////////////////////////////////
-seccomp_rule_add, seccomp_rule_add_exact \- Add a seccomp filter rule
+seccomp_rule_add, seccomp_rule_add_exact, seccomp_rule_add_arch,
+seccomp_rule_add_exact_arch \- Add a seccomp filter rule
 .\" //////////////////////////////////////////////////////////////////////////
 .SH SYNOPSIS
 .\" //////////////////////////////////////////////////////////////////////////
@@ -54,6 +55,26 @@ seccomp_rule_add, seccomp_rule_add_exact \- Add a seccomp filter rule
 .BI "                                 unsigned int " arg_cnt ","
 .BI "                                 const struct scmp_arg_cmp *"arg_array ");"
 .sp
+.BI "int seccomp_rule_add_arch(scmp_filter_ctx " ctx ","
+.BI "                          uint32_t " arch_token ", uint32_t " action ","
+.BI "                          int " syscall ", unsigned int " arg_cnt ","
+.BI "                          " ... ");"
+.BI "int seccomp_rule_add_exact_arch(scmp_filter_ctx " ctx ","
+.BI "                                uint32_t " arch_token ","
+.BI "                                uint32_t " action ", int " syscall ","
+.BI "                                unsigned int " arg_cnt ", " ... ");"
+.sp
+.BI "int seccomp_rule_add_arch_array(scmp_filter_ctx " ctx ","
+.BI "                                uint32_t " arch_token ","
+.BI "                                uint32_t " action ", int " syscall ","
+.BI "                                unsigned int " arg_cnt ","
+.BI "                                const struct scmp_arg_cmp *"arg_array ");"
+.BI "int seccomp_rule_add_exact_arch_array(scmp_filter_ctx " ctx ","
+.BI "                                      uint32_t " arch_token ","
+.BI "                                      uint32_t " action ", int " syscall ","
+.BI "                                      unsigned int " arg_cnt ","
+.BI "                                      const struct scmp_arg_cmp *"arg_array ");"
+.sp
 Link with \fI\-lseccomp\fP.
 .fi
 .\" //////////////////////////////////////////////////////////////////////////
@@ -64,8 +85,12 @@ The
 .BR seccomp_rule_add (),
 .BR seccomp_rule_add_array (),
 .BR seccomp_rule_add_exact (),
+.BR seccomp_rule_add_exact_array (),
+.BR seccomp_rule_add_arch (),
+.BR seccomp_rule_add_arch_array (),
+.BR seccomp_rule_add_exact_arch (),
 and
-.BR seccomp_rule_add_exact_array ()
+.BR seccomp_rule_add_exact_arch_array ()
 functions all add a new filter rule to the current seccomp filter.  The
 .BR seccomp_rule_add ()
 and
@@ -83,6 +108,30 @@ filter ruleset,
 and
 .BR seccomp_rule_add_array ()
 do guarantee the same behavior regardless of the architecture.
+.P
+The
+.BR seccomp_rule_add_arch (),
+.BR seccomp_rule_add_arch_array (),
+.BR seccomp_rule_add_exact_arch (),
+and
+.BR seccomp_rule_add_exact_arch_array ()
+functions are architecture-scoped variants which only add the rule to the
+architecture identified by
+.IR arch_token .
+The architecture must already be present in the filter, or the call will fail
+with
+.BR \-EEXIST .
+If
+.I arch_token
+is
+.BR SCMP_ARCH_NATIVE ,
+the native architecture is used.  Unlike the non-architecture-scoped exact
+functions, the exact architecture-scoped functions may be used with filters
+containing more than one architecture.
+.P
+Architecture-scoped rules are useful when different ABIs require different
+sandbox policy.  Rules added with the historical non-architecture-scoped
+functions continue to apply to every architecture in the filter.
 .P
 The newly added filter rule does not take effect until the entire filter is
 loaded into the kernel using
@@ -327,8 +376,12 @@ The
 .BR seccomp_rule_add (),
 .BR seccomp_rule_add_array (),
 .BR seccomp_rule_add_exact (),
+.BR seccomp_rule_add_exact_array (),
+.BR seccomp_rule_add_arch (),
+.BR seccomp_rule_add_arch_array (),
+.BR seccomp_rule_add_exact_arch (),
 and
-.BR seccomp_rule_add_exact_array ()
+.BR seccomp_rule_add_exact_arch_array ()
 functions return zero on success or one of the following error codes on
 failure:
 .TP
@@ -336,7 +389,9 @@ failure:
 Architecture specific failure.
 .TP
 .B -EEXIST
-The rule already exists.
+The rule already exists, or the architecture specified by
+.I arch_token
+is not present in the filter.
 .TP
 .B -EACCES
 The rule conflicts with the filter (for example, the rule

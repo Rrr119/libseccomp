@@ -102,7 +102,8 @@ check_PROGRAMS = \
 	64-live-trapx \
 	65-sim-db_tree_args \
 	66-sim-acc_reload \
-	67-sim-arch_syscall_load
+	67-sim-arch_syscall_load \
+	68-sim-arch_filter
 
 EXTRA_DIST_TESTPYTHON = \
 	util.py \
@@ -239,7 +240,8 @@ EXTRA_DIST_TESTCFGS = \
 	64-live-trapx.tests \
 	65-sim-db_tree_args.tests \
 	66-sim-acc_reload.tests \
-	67-sim-arch_syscall_load.tests
+	67-sim-arch_syscall_load.tests \
+	68-sim-arch_filter.tests
 
 EXTRA_DIST_TESTSCRIPTS = \
 	38-basic-pfc_coverage.sh 38-basic-pfc_coverage.pfc \

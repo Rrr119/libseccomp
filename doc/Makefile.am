@@ -28,8 +28,11 @@ dist_man3_MANS = \
 	man/man3/seccomp_attr_get.3 \
 	man/man3/seccomp_attr_set.3 \
 	man/man3/seccomp_export_bpf.3 \
+	man/man3/seccomp_export_bpf_arch.3 \
 	man/man3/seccomp_export_bpf_mem.3 \
+	man/man3/seccomp_export_bpf_mem_arch.3 \
 	man/man3/seccomp_export_pfc.3 \
+	man/man3/seccomp_export_pfc_arch.3 \
 	man/man3/seccomp_init.3 \
 	man/man3/seccomp_load.3 \
 	man/man3/seccomp_merge.3 \
@@ -37,8 +40,12 @@ dist_man3_MANS = \
 	man/man3/seccomp_release.3 \
 	man/man3/seccomp_reset.3 \
 	man/man3/seccomp_rule_add.3 \
+	man/man3/seccomp_rule_add_arch.3 \
+	man/man3/seccomp_rule_add_arch_array.3 \
 	man/man3/seccomp_rule_add_array.3 \
 	man/man3/seccomp_rule_add_exact.3 \
+	man/man3/seccomp_rule_add_exact_arch.3 \
+	man/man3/seccomp_rule_add_exact_arch_array.3 \
 	man/man3/seccomp_rule_add_exact_array.3 \
 	man/man3/seccomp_notify_alloc.3 \
 	man/man3/seccomp_notify_fd.3 \

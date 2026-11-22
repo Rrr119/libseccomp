@@ -105,7 +105,7 @@ static int _rc_filter(int err)
  * to determine if we should be filtering the return codes.
  *
  */
-static int _rc_filter_sys(struct db_filter_col *col, int err)
+static int _rc_filter_sys(const struct db_filter_col *col, int err)
 {
 	/* pass through success values */
 	if (err >= 0)
@@ -567,11 +567,24 @@ API int seccomp_syscall_priority(scmp_filter_ctx ctx,
 	return _rc_filter(db_col_syscall_priority(col, syscall, priority));
 }
 
-/* NOTE - function header comment in include/seccomp.h */
-API int seccomp_rule_add_array(scmp_filter_ctx ctx,
-			       uint32_t action, int syscall,
-			       unsigned int arg_cnt,
-			       const struct scmp_arg_cmp *arg_array)
+/**
+ * Add a new rule to the filter
+ * @param ctx the filter context
+ * @param arch_token the architecture token, zero for all architectures
+ * @param strict the strict flag
+ * @param action the filter action
+ * @param syscall the syscall number
+ * @param arg_cnt the number of argument filters
+ * @param arg_array the argument filter array
+ *
+ * This helper implements both the historical all-architecture rule API and
+ * the architecture-scoped rule API.  A non-zero @arch_token limits the rule
+ * to a single architecture.
+ *
+ */
+static int _rule_add(scmp_filter_ctx ctx, uint32_t arch_token, bool strict,
+		     uint32_t action, int syscall, unsigned int arg_cnt,
+		     const struct scmp_arg_cmp *arg_array)
 {
 	int rc;
 	struct db_filter_col *col = (struct db_filter_col *)ctx;
@@ -584,14 +597,48 @@ API int seccomp_rule_add_array(scmp_filter_ctx ctx,
 	if (db_col_valid(col) || _syscall_valid(col, syscall))
 		return _rc_filter(-EINVAL);
 
+	if (arch_token != 0) {
+		if (arch_valid(arch_token))
+			return _rc_filter(-EINVAL);
+		if (db_col_arch_exist(col, arch_token) != -EEXIST)
+			return _rc_filter(-EEXIST);
+	}
+
 	rc = db_col_action_valid(col, action);
 	if (rc < 0)
 		return _rc_filter(rc);
 	if (action == col->attr.act_default)
 		return _rc_filter(-EACCES);
 
-	return _rc_filter(db_col_rule_add(col, 0, action,
-					  syscall, arg_cnt, arg_array));
+	/* The historical exact API is ambiguous with more than one
+	 * architecture; an architecture-scoped exact rule is not. */
+	if (strict && arch_token == 0 && col->filter_cnt > 1)
+		return _rc_filter(-EOPNOTSUPP);
+
+	return _rc_filter(db_col_rule_add_arch(col, arch_token, strict, action,
+					      syscall, arg_cnt, arg_array));
+}
+
+/* NOTE - function header comment in include/seccomp.h */
+API int seccomp_rule_add_array(scmp_filter_ctx ctx,
+			       uint32_t action, int syscall,
+			       unsigned int arg_cnt,
+			       const struct scmp_arg_cmp *arg_array)
+{
+	return _rule_add(ctx, 0, false, action, syscall, arg_cnt, arg_array);
+}
+
+/* NOTE - function header comment in include/seccomp.h */
+API int seccomp_rule_add_arch_array(scmp_filter_ctx ctx, uint32_t arch_token,
+				    uint32_t action, int syscall,
+				    unsigned int arg_cnt,
+				    const struct scmp_arg_cmp *arg_array)
+{
+	if (arch_token == 0)
+		arch_token = arch_def_native->token;
+
+	return _rule_add(ctx, arch_token, false, action, syscall,
+			 arg_cnt, arg_array);
 }
 
 /* NOTE - function header comment in include/seccomp.h */
@@ -623,28 +670,21 @@ API int seccomp_rule_add_exact_array(scmp_filter_ctx ctx,
 				     unsigned int arg_cnt,
 				     const struct scmp_arg_cmp *arg_array)
 {
-	int rc;
-	struct db_filter_col *col = (struct db_filter_col *)ctx;
+	return _rule_add(ctx, 0, true, action, syscall, arg_cnt, arg_array);
+}
 
-	if (arg_cnt > ARG_COUNT_MAX)
-		return _rc_filter(-EINVAL);
-	if (arg_cnt > 0 && arg_array == NULL)
-		return _rc_filter(-EINVAL);
+/* NOTE - function header comment in include/seccomp.h */
+API int seccomp_rule_add_exact_arch_array(scmp_filter_ctx ctx,
+					  uint32_t arch_token,
+					  uint32_t action, int syscall,
+					  unsigned int arg_cnt,
+					  const struct scmp_arg_cmp *arg_array)
+{
+	if (arch_token == 0)
+		arch_token = arch_def_native->token;
 
-	if (db_col_valid(col) || _syscall_valid(col, syscall))
-		return _rc_filter(-EINVAL);
-
-	rc = db_col_action_valid(col, action);
-	if (rc < 0)
-		return _rc_filter(rc);
-	if (action == col->attr.act_default)
-		return _rc_filter(-EACCES);
-
-	if (col->filter_cnt > 1)
-		return _rc_filter(-EOPNOTSUPP);
-
-	return _rc_filter(db_col_rule_add(col, 1, action,
-					  syscall, arg_cnt, arg_array));
+	return _rule_add(ctx, arch_token, true, action, syscall,
+			 arg_cnt, arg_array);
 }
 
 /* NOTE - function header comment in include/seccomp.h */
@@ -666,6 +706,52 @@ API int seccomp_rule_add_exact(scmp_filter_ctx ctx,
 		arg_array[iter] = va_arg(arg_list, struct scmp_arg_cmp);
 	rc = seccomp_rule_add_exact_array(ctx,
 					  action, syscall, arg_cnt, arg_array);
+	va_end(arg_list);
+
+	return _rc_filter(rc);
+}
+
+/* NOTE - function header comment in include/seccomp.h */
+API int seccomp_rule_add_arch(scmp_filter_ctx ctx, uint32_t arch_token,
+			      uint32_t action, int syscall,
+			      unsigned int arg_cnt, ...)
+{
+	int rc;
+	int iter;
+	struct scmp_arg_cmp arg_array[ARG_COUNT_MAX];
+	va_list arg_list;
+
+	if (arg_cnt > ARG_COUNT_MAX)
+		return _rc_filter(-EINVAL);
+
+	va_start(arg_list, arg_cnt);
+	for (iter = 0; iter < arg_cnt; ++iter)
+		arg_array[iter] = va_arg(arg_list, struct scmp_arg_cmp);
+	rc = seccomp_rule_add_arch_array(ctx, arch_token, action, syscall,
+					 arg_cnt, arg_array);
+	va_end(arg_list);
+
+	return _rc_filter(rc);
+}
+
+/* NOTE - function header comment in include/seccomp.h */
+API int seccomp_rule_add_exact_arch(scmp_filter_ctx ctx, uint32_t arch_token,
+				    uint32_t action, int syscall,
+				    unsigned int arg_cnt, ...)
+{
+	int rc;
+	int iter;
+	struct scmp_arg_cmp arg_array[ARG_COUNT_MAX];
+	va_list arg_list;
+
+	if (arg_cnt > ARG_COUNT_MAX)
+		return _rc_filter(-EINVAL);
+
+	va_start(arg_list, arg_cnt);
+	for (iter = 0; iter < arg_cnt; ++iter)
+		arg_array[iter] = va_arg(arg_list, struct scmp_arg_cmp);
+	rc = seccomp_rule_add_exact_arch_array(ctx, arch_token, action,
+					       syscall, arg_cnt, arg_array);
 	va_end(arg_list);
 
 	return _rc_filter(rc);
@@ -737,6 +823,54 @@ API int seccomp_notify_addfd(int fd, struct seccomp_notif_addfd *addfd)
 	return _rc_filter(sys_notify_addfd(fd, addfd));
 }
 
+/**
+ * Prepare a single-architecture view of a filter collection
+ * @param ctx the filter context
+ * @param arch_token the architecture token
+ * @param col the source filter collection
+ * @param filter the matched architecture filter
+ * @param single the single-architecture collection view
+ *
+ * Resolve @arch_token, verify it is present in @col, and initialize @single
+ * so it contains only the matching architecture filter.
+ *
+ */
+static int _arch_col_prepare(const scmp_filter_ctx ctx, uint32_t arch_token,
+			     const struct db_filter_col **col,
+			     struct db_filter **filter,
+			     struct db_filter_col *single)
+{
+	unsigned int iter;
+
+	if (_ctx_valid(ctx))
+		return -EINVAL;
+	*col = (const struct db_filter_col *)ctx;
+
+	if (arch_token == 0)
+		arch_token = arch_def_native->token;
+	if (arch_valid(arch_token))
+		return -EINVAL;
+
+	*filter = NULL;
+	for (iter = 0; iter < (*col)->filter_cnt; iter++) {
+		if ((*col)->filters[iter]->arch->token == arch_token) {
+			*filter = (*col)->filters[iter];
+			break;
+		}
+	}
+	if (*filter == NULL)
+		return -EEXIST;
+
+	*single = **col;
+	single->filters = filter;
+	single->filter_cnt = 1;
+	single->endian = (*filter)->arch->endian;
+	single->snapshots = NULL;
+	single->prgm_bpf = NULL;
+
+	return 0;
+}
+
 /* NOTE - function header comment in include/seccomp.h */
 API int seccomp_export_pfc(const scmp_filter_ctx ctx, int fd)
 {
@@ -748,6 +882,23 @@ API int seccomp_export_pfc(const scmp_filter_ctx ctx, int fd)
 	col = (struct db_filter_col *)ctx;
 
 	rc = gen_pfc_generate(col, fd);
+	return _rc_filter_sys(col, rc);
+}
+
+/* NOTE - function header comment in include/seccomp.h */
+API int seccomp_export_pfc_arch(const scmp_filter_ctx ctx, uint32_t arch_token,
+				int fd)
+{
+	int rc;
+	struct db_filter *filter;
+	struct db_filter_col single;
+	const struct db_filter_col *col;
+
+	rc = _arch_col_prepare(ctx, arch_token, &col, &filter, &single);
+	if (rc < 0)
+		return _rc_filter(rc);
+
+	rc = gen_pfc_generate(&single, fd);
 	return _rc_filter_sys(col, rc);
 }
 
@@ -769,6 +920,33 @@ API int seccomp_export_bpf(const scmp_filter_ctx ctx, int fd)
 	rc = write(fd, program->blks, BPF_PGM_SIZE(program));
 	if (rc < 0)
 		return _rc_filter_sys(col, -errno);
+
+	return 0;
+}
+
+/* NOTE - function header comment in include/seccomp.h */
+API int seccomp_export_bpf_arch(const scmp_filter_ctx ctx, uint32_t arch_token,
+				int fd)
+{
+	int rc;
+	struct bpf_program *program;
+	struct db_filter *filter;
+	struct db_filter_col single;
+	const struct db_filter_col *col;
+
+	rc = _arch_col_prepare(ctx, arch_token, &col, &filter, &single);
+	if (rc < 0)
+		return _rc_filter(rc);
+
+	rc = gen_bpf_generate(&single, &program);
+	if (rc < 0)
+		return _rc_filter(rc);
+	rc = write(fd, program->blks, BPF_PGM_SIZE(program));
+	if (rc < 0)
+		rc = -errno;
+	gen_bpf_release(program);
+	if (rc < 0)
+		return _rc_filter_sys(col, rc);
 
 	return 0;
 }
@@ -798,6 +976,41 @@ API int seccomp_export_bpf_mem(const scmp_filter_ctx ctx, void *buf,
 			memcpy(buf, program->blks, BPF_PGM_SIZE(program));
 	}
 	*len = BPF_PGM_SIZE(program);
+
+	return rc;
+}
+
+/* NOTE - function header comment in include/seccomp.h */
+API int seccomp_export_bpf_mem_arch(const scmp_filter_ctx ctx,
+				    uint32_t arch_token, void *buf,
+				    size_t *len)
+{
+	int rc;
+	struct bpf_program *program;
+	struct db_filter *filter;
+	struct db_filter_col single;
+	const struct db_filter_col *col;
+
+	if (!len)
+		return _rc_filter(-EINVAL);
+
+	rc = _arch_col_prepare(ctx, arch_token, &col, &filter, &single);
+	if (rc < 0)
+		return _rc_filter(rc);
+
+	rc = gen_bpf_generate(&single, &program);
+	if (rc < 0)
+		return _rc_filter(rc);
+
+	if (buf) {
+		/* If we have a big enough buffer, write the program. */
+		if (BPF_PGM_SIZE(program) > *len)
+			rc = _rc_filter(-ERANGE);
+		else
+			memcpy(buf, program->blks, BPF_PGM_SIZE(program));
+	}
+	*len = BPF_PGM_SIZE(program);
+	gen_bpf_release(program);
 
 	return rc;
 }

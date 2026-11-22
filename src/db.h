@@ -212,6 +212,10 @@ int db_col_db_remove(struct db_filter_col *col, uint32_t arch_token);
 int db_col_rule_add(struct db_filter_col *col,
 		    bool strict, uint32_t action, int syscall,
 		    unsigned int arg_cnt, const struct scmp_arg_cmp *arg_array);
+int db_col_rule_add_arch(struct db_filter_col *col, uint32_t arch_token,
+			 bool strict, uint32_t action, int syscall,
+			 unsigned int arg_cnt,
+			 const struct scmp_arg_cmp *arg_array);
 
 int db_col_syscall_priority(struct db_filter_col *col,
 			    int syscall, uint8_t priority);

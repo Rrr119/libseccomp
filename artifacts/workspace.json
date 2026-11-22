@@ -1,0 +1,17 @@
+{
+  "root": "/home/dev/feedback/uid34517",
+  "B": "/home/dev/feedback/uid34517",
+  "sha": "d157829bfa5dd9023d5ed421183a8e5cd04cfaea",
+  "wslDistro": "Ubuntu-26.04",
+  "source": {
+    "owner": "seccomp",
+    "repo": "libseccomp",
+    "sha": "d157829bfa5dd9023d5ed421183a8e5cd04cfaea"
+  },
+  "fork": {
+    "owner": "Rrr119",
+    "repo": "libseccomp",
+    "cloneUrl": "https://github.com/Rrr119/libseccomp.git"
+  },
+  "at": "2026-11-22T20:27:28.148Z"
+}

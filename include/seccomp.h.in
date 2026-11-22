@@ -732,6 +732,47 @@ int seccomp_rule_add_array(scmp_filter_ctx ctx,
 			   const struct scmp_arg_cmp *arg_array);
 
 /**
+ * Add a new rule to one architecture in the filter
+ * @param ctx the filter context
+ * @param arch_token the architecture token, e.g. SCMP_ARCH_*
+ * @param action the filter action
+ * @param syscall the syscall number
+ * @param arg_cnt the number of elements in the arg_array parameter
+ * @param arg_array array of scmp_arg_cmp structs
+ *
+ * This function behaves like seccomp_rule_add_array() but only adds the rule
+ * to the specified architecture.  The architecture must already be present in
+ * the filter.  If @arch_token is SCMP_ARCH_NATIVE, the native architecture is
+ * used.  Returns zero on success, -EEXIST if the architecture is not present,
+ * and other negative values on failure.
+ *
+ */
+int seccomp_rule_add_arch_array(scmp_filter_ctx ctx, uint32_t arch_token,
+				uint32_t action, int syscall,
+				unsigned int arg_cnt,
+				const struct scmp_arg_cmp *arg_array);
+
+/**
+ * Add a new rule to one architecture in the filter
+ * @param ctx the filter context
+ * @param arch_token the architecture token, e.g. SCMP_ARCH_*
+ * @param action the filter action
+ * @param syscall the syscall number
+ * @param arg_cnt the number of argument filters in the argument filter chain
+ * @param ... scmp_arg_cmp structs (use of SCMP_ARG_CMP() recommended)
+ *
+ * This function behaves like seccomp_rule_add() but only adds the rule to the
+ * specified architecture.  The architecture must already be present in the
+ * filter.  If @arch_token is SCMP_ARCH_NATIVE, the native architecture is
+ * used.  Returns zero on success, -EEXIST if the architecture is not present,
+ * and other negative values on failure.
+ *
+ */
+int seccomp_rule_add_arch(scmp_filter_ctx ctx, uint32_t arch_token,
+			  uint32_t action, int syscall,
+			  unsigned int arg_cnt, ...);
+
+/**
  * Add a new rule to the filter
  * @param ctx the filter context
  * @param action the filter action
@@ -768,6 +809,49 @@ int seccomp_rule_add_exact_array(scmp_filter_ctx ctx,
 				 uint32_t action, int syscall,
 				 unsigned int arg_cnt,
 				 const struct scmp_arg_cmp *arg_array);
+
+/**
+ * Add a new exact rule to one architecture in the filter
+ * @param ctx the filter context
+ * @param arch_token the architecture token, e.g. SCMP_ARCH_*
+ * @param action the filter action
+ * @param syscall the syscall number
+ * @param arg_cnt the number of elements in the arg_array parameter
+ * @param arg_array array of scmp_arg_cmp structs
+ *
+ * This function behaves like seccomp_rule_add_exact_array() but only adds the
+ * rule to the specified architecture.  Unlike the non-architecture-scoped
+ * exact API, this function is valid for filters containing multiple
+ * architectures.  The architecture must already be present in the filter.
+ * Returns zero on success, -EEXIST if the architecture is not present, and
+ * other negative values on failure.
+ *
+ */
+int seccomp_rule_add_exact_arch_array(scmp_filter_ctx ctx,
+				      uint32_t arch_token, uint32_t action,
+				      int syscall, unsigned int arg_cnt,
+				      const struct scmp_arg_cmp *arg_array);
+
+/**
+ * Add a new exact rule to one architecture in the filter
+ * @param ctx the filter context
+ * @param arch_token the architecture token, e.g. SCMP_ARCH_*
+ * @param action the filter action
+ * @param syscall the syscall number
+ * @param arg_cnt the number of argument filters in the argument filter chain
+ * @param ... scmp_arg_cmp structs (use of SCMP_ARG_CMP() recommended)
+ *
+ * This function behaves like seccomp_rule_add_exact() but only adds the rule
+ * to the specified architecture.  Unlike the non-architecture-scoped exact
+ * API, this function is valid for filters containing multiple architectures.
+ * The architecture must already be present in the filter.  Returns zero on
+ * success, -EEXIST if the architecture is not present, and other negative
+ * values on failure.
+ *
+ */
+int seccomp_rule_add_exact_arch(scmp_filter_ctx ctx, uint32_t arch_token,
+				uint32_t action, int syscall,
+				unsigned int arg_cnt, ...);
 
 /**
  * Allocate a pair of notification request/response structures
@@ -860,6 +944,22 @@ int seccomp_notify_addfd(int fd, struct seccomp_notif_addfd *addfd);
 int seccomp_export_pfc(const scmp_filter_ctx ctx, int fd);
 
 /**
+ * Generate seccomp Pseudo Filter Code (PFC) for one architecture
+ * @param ctx the filter context
+ * @param arch_token the architecture token, e.g. SCMP_ARCH_*
+ * @param fd the destination fd
+ *
+ * This function generates a PFC program containing only the rules for the
+ * specified architecture and writes it to the given fd.  The architecture
+ * must already be present in the filter.  If @arch_token is SCMP_ARCH_NATIVE,
+ * the native architecture is used.  Returns zero on success, -EEXIST if the
+ * architecture is not present, and other negative values on failure.
+ *
+ */
+int seccomp_export_pfc_arch(const scmp_filter_ctx ctx, uint32_t arch_token,
+			    int fd);
+
+/**
  * Generate seccomp Berkeley Packet Filter (BPF) code and export it to a file
  * @param ctx the filter context
  * @param fd the destination fd
@@ -869,6 +969,22 @@ int seccomp_export_pfc(const scmp_filter_ctx ctx, int fd);
  *
  */
 int seccomp_export_bpf(const scmp_filter_ctx ctx, int fd);
+
+/**
+ * Generate seccomp Berkeley Packet Filter (BPF) code for one architecture
+ * @param ctx the filter context
+ * @param arch_token the architecture token, e.g. SCMP_ARCH_*
+ * @param fd the destination fd
+ *
+ * This function generates a BPF program containing only the rules for the
+ * specified architecture and writes it to the given fd.  The architecture
+ * must already be present in the filter.  If @arch_token is SCMP_ARCH_NATIVE,
+ * the native architecture is used.  Returns zero on success, -EEXIST if the
+ * architecture is not present, and other negative values on failure.
+ *
+ */
+int seccomp_export_bpf_arch(const scmp_filter_ctx ctx, uint32_t arch_token,
+			    int fd);
 
 /**
  * Generate seccomp Berkeley Packet Filter (BPF) code and export it to a buffer
@@ -882,6 +998,24 @@ int seccomp_export_bpf(const scmp_filter_ctx ctx, int fd);
  *
  */
 int seccomp_export_bpf_mem(const scmp_filter_ctx ctx, void *buf, size_t *len);
+
+/**
+ * Generate BPF code for one architecture and export it to a buffer
+ * @param ctx the filter context
+ * @param arch_token the architecture token, e.g. SCMP_ARCH_*
+ * @param buf the destination buffer
+ * @param len on input the length of the buffer, on output the number of bytes
+ * in the program
+ *
+ * This function generates a BPF program containing only the rules for the
+ * specified architecture and writes it to the given buffer.  The architecture
+ * must already be present in the filter.  If @arch_token is SCMP_ARCH_NATIVE,
+ * the native architecture is used.  Returns zero on success, -EEXIST if the
+ * architecture is not present, and other negative values on failure.
+ *
+ */
+int seccomp_export_bpf_mem_arch(const scmp_filter_ctx ctx, uint32_t arch_token,
+				void *buf, size_t *len);
 
 /**
  * Start a filter transaction
